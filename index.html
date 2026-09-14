@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Call Tracking & Drop Detection</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <div>
+        <p class="eyebrow">Live Sheet Dashboard</p>
+        <h1>Call Tracking & Drop Detection</h1>
+      </div>
+      <div class="header-actions">
+        <button id="refreshBtn" class="icon-button" title="Refresh data" aria-label="Refresh data">↻</button>
+        <span id="lastUpdated" class="muted">Not loaded</span>
+      </div>
+    </header>
+
+    <main>
+      <section class="config-panel" aria-labelledby="dataSourcesTitle">
+        <div class="section-heading">
+          <div>
+            <h2 id="dataSourcesTitle">Data Sources</h2>
+            <p>Published CSV links are fetched directly. Mappings are explicit and saved in this browser.</p>
+          </div>
+          <button id="saveConfigBtn">Save & Load</button>
+        </div>
+        <div class="source-grid">
+          <label>
+            Calls sheet CSV URL
+            <input id="callsUrl" type="url" placeholder="https://docs.google.com/spreadsheets/.../gviz/tq?tqx=out:csv&gid=0" />
+          </label>
+          <label>
+            Task on/off sheet CSV URL
+            <input id="togglesUrl" type="url" placeholder="https://docs.google.com/spreadsheets/.../gviz/tq?tqx=out:csv&gid=0" />
+          </label>
+        </div>
+        <div id="loadStatus" class="status-line"></div>
+      </section>
+
+      <nav class="tabs" aria-label="Dashboard pages">
+        <button class="tab active" data-tab="shop">By Shop</button>
+        <button class="tab" data-tab="projections">Cross-Shop Projections</button>
+        <button class="tab" data-tab="mappings">Mappings</button>
+      </nav>
+
+      <section id="emptyState" class="empty-state">
+        <h2>Connect the two published CSV sheets to begin.</h2>
+        <p>The dashboard will fetch the latest rows, exclude unassociated call rows, match shops and task types through explicit mappings, then calculate call-volume drops against week-over-week and six-month baselines.</p>
+      </section>
+
+      <section id="shopPage" class="page active">
+        <div class="summary-grid">
+          <article>
+            <span>Company calls this week</span>
+            <strong id="companyCurrent">0</strong>
+            <small id="companyWow">0% vs prior week</small>
+          </article>
+          <article>
+            <span>Shops with drops</span>
+            <strong id="dropCount">0</strong>
+            <small>Week or baseline flags</small>
+          </article>
+          <article>
+            <span>Execution failures</span>
+            <strong id="executionFailures">0</strong>
+            <small>Tasks normal, calls dropped</small>
+          </article>
+          <article>
+            <span>Unmapped rows</span>
+            <strong id="unmappedCount">0</strong>
+            <small>Need mapping review</small>
+          </article>
+        </div>
+
+        <div class="split-layout">
+          <section class="table-shell">
+            <div class="section-heading">
+              <div>
+                <h2>Shop Health</h2>
+                <p>Only task types currently toggled on are included.</p>
+              </div>
+              <input id="shopSearch" type="search" placeholder="Search shops" />
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Shop</th>
+                    <th>This week</th>
+                    <th>Prior week</th>
+                    <th>% change</th>
+                    <th>Creation</th>
+                    <th>Diagnosis</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="shopRows"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <aside class="detail-panel">
+            <div class="section-heading compact">
+              <div>
+                <h2 id="selectedShopName">Select a shop</h2>
+                <p id="selectedShopMeta">Trend, task mix, and baseline comparison.</p>
+              </div>
+            </div>
+            <canvas id="trendCanvas" width="720" height="260" aria-label="Shop call trend"></canvas>
+            <div id="taskBreakdown" class="task-breakdown"></div>
+            <div class="diagnostic-box">
+              <h3>Diagnostic Cross-Check</h3>
+              <div id="diagnosticMatrix" class="matrix"></div>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section id="projectionsPage" class="page">
+        <div class="split-layout projections-layout">
+          <section class="table-shell">
+            <div class="section-heading">
+              <div>
+                <h2>Ranked Early Warnings</h2>
+                <p>Ordered by baseline gap, recent drop, and projected risk.</p>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Scope</th>
+                    <th>This week</th>
+                    <th>Baseline</th>
+                    <th>WoW</th>
+                    <th>Projected</th>
+                    <th>Severity</th>
+                  </tr>
+                </thead>
+                <tbody id="warningRows"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="heatmap-shell">
+            <div class="section-heading">
+              <div>
+                <h2>Shop × Task Heatmap</h2>
+                <p>Green healthy, amber watch, red dropped, gray off or unmapped.</p>
+              </div>
+            </div>
+            <div id="heatmap" class="heatmap"></div>
+          </section>
+        </div>
+      </section>
+
+      <section id="mappingsPage" class="page">
+        <div class="mapping-grid">
+          <section class="table-shell">
+            <div class="section-heading">
+              <div>
+                <h2>Shop Name Mapping</h2>
+                <p>Map call-log shop names to on/off sheet shop names.</p>
+              </div>
+              <button id="saveShopMappings">Save shop mappings</button>
+            </div>
+            <div id="shopMappings" class="mapping-list"></div>
+          </section>
+          <section class="table-shell">
+            <div class="section-heading">
+              <div>
+                <h2>Task Type Mapping</h2>
+                <p>Map Task Association values to toggle columns.</p>
+              </div>
+              <button id="saveTaskMappings">Save task mappings</button>
+            </div>
+            <div id="taskMappings" class="mapping-list"></div>
+          </section>
+        </div>
+      </section>
+    </main>
+
+    <script src="./config.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>
