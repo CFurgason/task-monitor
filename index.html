@@ -19,26 +19,7 @@
     </header>
 
     <main>
-      <section class="config-panel" aria-labelledby="dataSourcesTitle">
-        <div class="section-heading">
-          <div>
-            <h2 id="dataSourcesTitle">Data Sources</h2>
-            <p>Published CSV links are fetched directly. Mappings are explicit and saved in this browser.</p>
-          </div>
-          <button id="saveConfigBtn">Save & Load</button>
-        </div>
-        <div class="source-grid">
-          <label>
-            Calls sheet CSV URL
-            <input id="callsUrl" type="url" placeholder="https://docs.google.com/spreadsheets/.../gviz/tq?tqx=out:csv&gid=0" />
-          </label>
-          <label>
-            Task on/off sheet CSV URL
-            <input id="togglesUrl" type="url" placeholder="https://docs.google.com/spreadsheets/.../gviz/tq?tqx=out:csv&gid=0" />
-          </label>
-        </div>
-        <div id="loadStatus" class="status-line"></div>
-      </section>
+      <div id="loadStatus" class="status-line"></div>
 
       <nav class="tabs" aria-label="Dashboard pages">
         <button class="tab active" data-tab="shop">By Shop</button>
@@ -47,8 +28,8 @@
       </nav>
 
       <section id="emptyState" class="empty-state">
-        <h2>Connect the two published CSV sheets to begin.</h2>
-        <p>The dashboard will fetch the latest rows, exclude unassociated call rows, match shops and task types through explicit mappings, then calculate call-volume drops against week-over-week and six-month baselines.</p>
+        <h2>Loading Google Sheets data.</h2>
+        <p>The dashboard fetches the latest rows directly from the configured sheets, excludes unassociated call rows, matches shops and task types through explicit mappings, then calculates call-volume drops against week-over-week and six-month baselines.</p>
       </section>
 
       <section id="shopPage" class="page active">

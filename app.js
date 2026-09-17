@@ -58,8 +58,8 @@
     } catch (error) {
       setStatus("Saved settings could not be read. Starting fresh.", true);
     }
-    els.callsUrl.value = state.config.callsUrl || "";
-    els.togglesUrl.value = state.config.togglesUrl || "";
+    if (els.callsUrl) els.callsUrl.value = state.config.callsUrl || "";
+    if (els.togglesUrl) els.togglesUrl.value = state.config.togglesUrl || "";
   }
 
   function persist() {
@@ -471,11 +471,11 @@
   }
 
   async function loadData() {
-    state.config.callsUrl = els.callsUrl.value.trim();
-    state.config.togglesUrl = els.togglesUrl.value.trim();
+    state.config.callsUrl = els.callsUrl ? els.callsUrl.value.trim() : state.config.callsUrl;
+    state.config.togglesUrl = els.togglesUrl ? els.togglesUrl.value.trim() : state.config.togglesUrl;
     persist();
     if (!state.config.callsUrl || !state.config.togglesUrl) {
-      setStatus("Add both CSV URLs to load live dashboard data.", false);
+      setStatus("The dashboard needs both Google Sheet CSV URLs in config.js.", false);
       showEmpty(true);
       return;
     }
@@ -705,7 +705,7 @@
   }
 
   function setupEvents() {
-    els.saveConfigBtn.addEventListener("click", loadData);
+    if (els.saveConfigBtn) els.saveConfigBtn.addEventListener("click", loadData);
     els.refreshBtn.addEventListener("click", loadData);
     els.shopSearch.addEventListener("input", renderShopRows);
     els.saveShopMappings.addEventListener("click", () => saveMappings("shop"));
