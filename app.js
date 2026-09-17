@@ -39,7 +39,6 @@
     shopSearch: document.getElementById("shopSearch"),
     selectedTaskName: document.getElementById("selectedTaskName"),
     selectedTaskMeta: document.getElementById("selectedTaskMeta"),
-    trendCanvas: document.getElementById("trendCanvas"),
     taskBreakdown: document.getElementById("taskBreakdown"),
     diagnosticMatrix: document.getElementById("diagnosticMatrix"),
     warningRows: document.getElementById("warningRows"),
@@ -664,7 +663,6 @@
     if (!task) return;
     els.selectedTaskName.textContent = task.taskType;
     els.selectedTaskMeta.textContent = `${task.current.toLocaleString()} calls this week across ${task.activeShops.toLocaleString()} active shops. ${task.affectedShops.length.toLocaleString()} shops have a drop.`;
-    drawTrend(task.trend);
     const affected = task.affectedShops.length ? task.affectedShops : task.watchShops;
     els.taskBreakdown.innerHTML = affected.length
       .map(
@@ -683,41 +681,6 @@
       <div><strong>Watch shops</strong>${task.watchShops.length.toLocaleString()}</div>
       <div><strong>Task status</strong>${statusLabel(task.status)}</div>
     `;
-  }
-
-  function drawTrend(trend) {
-    const canvas = els.trendCanvas;
-    const ctx = canvas.getContext("2d");
-    const width = canvas.width;
-    const height = canvas.height;
-    ctx.clearRect(0, 0, width, height);
-    ctx.fillStyle = "#fbfcfd";
-    ctx.fillRect(0, 0, width, height);
-    const pad = 34;
-    const max = Math.max(1, ...trend.map((day) => day.count));
-    ctx.strokeStyle = "#d8dee3";
-    ctx.lineWidth = 1;
-    for (let i = 0; i <= 4; i += 1) {
-      const y = pad + ((height - pad * 2) * i) / 4;
-      ctx.beginPath();
-      ctx.moveTo(pad, y);
-      ctx.lineTo(width - pad, y);
-      ctx.stroke();
-    }
-    ctx.strokeStyle = "#1d6fa5";
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    trend.forEach((day, index) => {
-      const x = pad + ((width - pad * 2) * index) / Math.max(1, trend.length - 1);
-      const y = height - pad - (day.count / max) * (height - pad * 2);
-      if (index === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-    });
-    ctx.stroke();
-    ctx.fillStyle = "#64717b";
-    ctx.font = "14px system-ui";
-    ctx.fillText("Last 56 days", pad, height - 10);
-    ctx.fillText(`${max} max/day`, width - 105, 22);
   }
 
   function renderWarnings() {
