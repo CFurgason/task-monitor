@@ -52,21 +52,17 @@
   function loadStored() {
     try {
       const stored = JSON.parse(localStorage.getItem(storageKey) || "{}");
-      state.config = { ...state.config, ...(stored.config || {}) };
       state.shopMappings = { ...(repoConfig.shopMappings || {}), ...(stored.shopMappings || {}) };
       state.taskMappings = { ...(repoConfig.taskMappings || {}), ...(stored.taskMappings || {}) };
     } catch (error) {
       setStatus("Saved settings could not be read. Starting fresh.", true);
     }
-    if (els.callsUrl) els.callsUrl.value = state.config.callsUrl || "";
-    if (els.togglesUrl) els.togglesUrl.value = state.config.togglesUrl || "";
   }
 
   function persist() {
     localStorage.setItem(
       storageKey,
       JSON.stringify({
-        config: state.config,
         shopMappings: state.shopMappings,
         taskMappings: state.taskMappings,
       })
@@ -471,9 +467,6 @@
   }
 
   async function loadData() {
-    state.config.callsUrl = els.callsUrl ? els.callsUrl.value.trim() : state.config.callsUrl;
-    state.config.togglesUrl = els.togglesUrl ? els.togglesUrl.value.trim() : state.config.togglesUrl;
-    persist();
     if (!state.config.callsUrl || !state.config.togglesUrl) {
       setStatus("The dashboard needs both Google Sheet CSV URLs in config.js.", false);
       showEmpty(true);
