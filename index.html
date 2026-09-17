@@ -22,7 +22,7 @@
       <div id="loadStatus" class="status-line"></div>
 
       <nav class="tabs" aria-label="Dashboard pages">
-        <button class="tab active" data-tab="shop">By Task</button>
+        <button class="tab active" data-tab="shop">Task Drops</button>
         <button class="tab" data-tab="projections">Cross-Shop Projections</button>
         <button class="tab" data-tab="mappings">Mappings</button>
       </nav>
@@ -56,31 +56,23 @@
           </article>
         </div>
 
-        <div class="split-layout">
-          <section class="table-shell">
+        <div class="drop-layout">
+          <section class="table-shell drop-list-shell">
             <div class="section-heading">
               <div>
-                <h2>Task Health</h2>
-                <p>Task types are the primary signal. Shops appear only when that task drops at that shop.</p>
+                <h2>Urgent Task Drops</h2>
+                <p>Grouped by task. Shops only appear when that task is dropping at that shop.</p>
               </div>
-              <input id="shopSearch" type="search" placeholder="Search tasks" />
+              <div class="toolbar">
+                <select id="viewFilter" aria-label="Drop view">
+                  <option value="urgent">Urgent Drops</option>
+                  <option value="watch">Watch List</option>
+                  <option value="all">All Active Tasks</option>
+                </select>
+                <input id="shopSearch" type="search" placeholder="Search tasks or shops" />
+              </div>
             </div>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Task</th>
-                    <th>Active shops</th>
-                    <th>This week</th>
-                    <th>Prior week</th>
-                    <th>% change</th>
-                    <th>Dropped shops</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody id="shopRows"></tbody>
-              </table>
-            </div>
+            <div id="urgentGroups" class="drop-groups"></div>
           </section>
 
           <aside class="detail-panel">
@@ -91,6 +83,7 @@
               </div>
             </div>
             <canvas id="trendCanvas" width="720" height="260" aria-label="Task call trend"></canvas>
+            <div class="mini-heading">Affected Shops</div>
             <div id="taskBreakdown" class="task-breakdown"></div>
             <div class="diagnostic-box">
               <h3>Task Drop Summary</h3>
@@ -164,7 +157,7 @@
       </section>
     </main>
 
-    <script src="./config.js?v=20260917-2"></script>
-    <script src="./app.js?v=20260917-2"></script>
+    <script src="./config.js?v=20260917-3"></script>
+    <script src="./app.js?v=20260917-3"></script>
   </body>
 </html>

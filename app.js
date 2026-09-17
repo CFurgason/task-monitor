@@ -34,7 +34,8 @@
     dropCount: document.getElementById("dropCount"),
     executionFailures: document.getElementById("executionFailures"),
     unmappedCount: document.getElementById("unmappedCount"),
-    shopRows: document.getElementById("shopRows"),
+    viewFilter: document.getElementById("viewFilter"),
+    urgentGroups: document.getElementById("urgentGroups"),
     shopSearch: document.getElementById("shopSearch"),
     selectedTaskName: document.getElementById("selectedTaskName"),
     selectedTaskMeta: document.getElementById("selectedTaskMeta"),
@@ -260,6 +261,7 @@
     const today = new Date();
     const currentStart = periodStartFor(today, 6);
     const previousStart = periodStartFor(today, 13);
+    const prior4Start = periodStartFor(today, 34);
     const previousEnd = new Date(currentStart.getTime() - 1);
     const baselineStart = new Date(today.getTime() - 183 * msDay);
     const toggleRows = getToggleRowsByShop();
@@ -329,7 +331,7 @@
       const creationNormal = creationBaseline === 0 ? recentCreations > 0 : recentCreations >= Math.max(1, creationBaseline * 0.45);
       const callsDropped = isDropped(current, previous, baseline, lowerBound);
       const diagnosis = getDiagnosis(creationNormal, callsDropped);
-      const taskStats = onTasks.map((taskType) => buildTaskStat(shop, taskType, cleanCalls, currentStart, previousStart, previousEnd, baselineStart));
+      const taskStats = onTasks.map((taskType) => buildTaskStat(shop, taskType, cleanCalls, currentStart, previousStart, prior4Start, previousEnd, baselineStart, today));
       const trend = buildDailyTrend(calls, today);
       const projection = projectTwoWeeks(trend);
       return {
@@ -383,21 +385,32 @@
     return weeks;
   }
 
-  function buildTaskStat(shop, taskType, cleanCalls, currentStart, previousStart, previousEnd, baselineStart) {
+  function buildTaskStat(shop, taskType, cleanCalls, currentStart, previousStart, prior4Start, previousEnd, baselineStart, today) {
     const calls = cleanCalls.filter((call) => call.shop === shop && call.taskType === taskType);
     const current = calls.filter((call) => call.date >= currentStart).length;
     const previous = calls.filter((call) => call.date >= previousStart && call.date <= previousEnd).length;
+    const previous4WeekCalls = calls.filter((call) => call.date >= prior4Start && call.date <= previousEnd).length;
+    const previous4Avg = previous4WeekCalls / 4;
     const baselineWeeks = buildWeeklyCounts(calls, baselineStart, previousEnd);
     const baseline = median(baselineWeeks);
     const lowerBound = Math.max(0, baseline - standardDeviation(baselineWeeks));
+    const lastCallDate = calls.reduce((latest, call) => (!latest || call.date > latest ? call.date : latest), null);
+    const daysSinceCall = lastCallDate ? Math.floor((startOfDay(today) - startOfDay(lastCallDate)) / msDay) : null;
+    const dropInCalls = Math.round(current - previous4Avg);
+    const fourWeekPct = pctChange(current, previous4Avg);
+    const status = statusForDrop(current, previous4Avg, previous, baseline, lowerBound, daysSinceCall);
     return {
       taskType,
       current,
       previous,
+      previous4Avg,
+      dropInCalls,
+      daysSinceCall,
+      fourWeekPct,
       pct: pctChange(current, previous),
       baseline,
       lowerBound,
-      status: statusFor(current, previous, baseline, lowerBound),
+      status,
     };
   }
 
@@ -413,6 +426,7 @@
         const taskCalls = cleanCalls.filter((call) => call.taskType === taskType);
         const current = shopTaskStats.reduce((sum, stat) => sum + stat.current, 0);
         const previous = shopTaskStats.reduce((sum, stat) => sum + stat.previous, 0);
+        const previous4Avg = shopTaskStats.reduce((sum, stat) => sum + stat.previous4Avg, 0);
         const baseline = shopTaskStats.reduce((sum, stat) => sum + stat.baseline, 0);
         const lowerBound = shopTaskStats.reduce((sum, stat) => sum + stat.lowerBound, 0);
         const affectedShops = shopTaskStats
@@ -428,10 +442,14 @@
         return {
           taskType,
           activeShops: shopTaskStats.length,
+          allShops: shopTaskStats.sort((a, b) => a.shop.localeCompare(b.shop)),
           affectedShops,
           watchShops,
           current,
           previous,
+          previous4Avg,
+          dropInCalls: Math.round(current - previous4Avg),
+          fourWeekPct: pctChange(current, previous4Avg),
           pct: pctChange(current, previous),
           baseline,
           lowerBound,
@@ -454,6 +472,15 @@
   function statusFor(current, previous, baseline, lowerBound) {
     if (isDropped(current, previous, baseline, lowerBound)) return "bad";
     if ((previous >= 5 && current <= previous * 0.85) || (baseline >= 5 && current < baseline)) return "watch";
+    return "good";
+  }
+
+  function statusForDrop(current, previous4Avg, previous, baseline, lowerBound, daysSinceCall) {
+    const avgDrop = previous4Avg >= 1 && current < previous4Avg;
+    const deepAvgDrop = previous4Avg >= 1 && current <= previous4Avg * 0.35;
+    const stale = daysSinceCall !== null && daysSinceCall >= 7;
+    if (deepAvgDrop || (current === 0 && previous4Avg >= 1) || stale) return "bad";
+    if (avgDrop || isDropped(current, previous, baseline, lowerBound)) return "watch";
     return "good";
   }
 
@@ -491,7 +518,7 @@
       rows.push({ scope: shop.shop, current: shop.current, baseline: shop.baseline, pct: shop.pct, projection: shop.projection, status: shop.status });
       for (const task of shop.taskStats) {
         rows.push({
-          scope: `${shop.shop} · ${task.taskType}`,
+          scope: `${shop.shop} - ${task.taskType}`,
           current: task.current,
           baseline: task.baseline,
           pct: task.pct,
@@ -544,7 +571,7 @@
 
   function renderAll() {
     renderSummary();
-    renderTaskRows();
+    renderDropGroups();
     renderWarnings();
     renderHeatmap();
     renderMappings();
@@ -561,28 +588,75 @@
     els.unmappedCount.textContent = metrics.unmapped.rows.toLocaleString();
   }
 
-  function renderTaskRows() {
+  function renderDropGroups() {
     const query = els.shopSearch.value.trim().toLowerCase();
-    els.shopRows.innerHTML = "";
-    for (const task of state.metrics.taskSummaries.filter((item) => item.taskType.toLowerCase().includes(query))) {
-      const row = document.createElement("tr");
-      row.className = `clickable ${state.selectedTask === task.taskType ? "selected" : ""}`;
-      row.innerHTML = `
-        <td>${escapeHtml(task.taskType)}</td>
-        <td>${task.activeShops.toLocaleString()}</td>
-        <td>${task.current.toLocaleString()}</td>
-        <td>${task.previous.toLocaleString()}</td>
-        <td>${formatPct(task.pct)}</td>
-        <td>${task.affectedShops.length.toLocaleString()}</td>
-        <td>${pill(statusLabel(task.status), task.status)}</td>
-      `;
-      row.addEventListener("click", () => {
-        state.selectedTask = task.taskType;
-        renderTaskRows();
+    const mode = els.viewFilter ? els.viewFilter.value : "urgent";
+    const groups = state.metrics.taskSummaries
+      .map((task) => ({ ...task, visibleShops: shopsForTaskMode(task, mode) }))
+      .filter((task) => {
+        const matchesTask = task.taskType.toLowerCase().includes(query);
+        const matchesShop = task.visibleShops.some((shop) => shop.shop.toLowerCase().includes(query));
+        return task.visibleShops.length && (!query || matchesTask || matchesShop);
+      });
+
+    els.urgentGroups.innerHTML =
+      groups
+        .map(
+          (task) => `
+          <article class="drop-group ${state.selectedTask === task.taskType ? "selected-group" : ""}" data-task="${escapeAttr(task.taskType)}">
+            <div class="drop-group-header">
+              <h3>${escapeHtml(task.taskType)}</h3>
+              <span>${task.visibleShops.length.toLocaleString()} ${task.visibleShops.length === 1 ? "shop" : "shops"}</span>
+            </div>
+            <div class="drop-table-wrap">
+              <table class="drop-table">
+                <thead>
+                  <tr>
+                    <th>Shop</th>
+                    <th>Last 7 days</th>
+                    <th>Previous 4 week avg</th>
+                    <th>% change</th>
+                    <th>Drop in calls</th>
+                    <th>Days since call</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${task.visibleShops.map((shop) => renderDropRow(shop)).join("")}
+                </tbody>
+              </table>
+            </div>
+          </article>`
+        )
+        .join("") || `<div class="empty-inline">No task drops match this view.</div>`;
+
+    document.querySelectorAll(".drop-group").forEach((group) => {
+      group.addEventListener("click", () => {
+        state.selectedTask = group.dataset.task;
+        renderDropGroups();
         renderTaskDetail();
       });
-      els.shopRows.appendChild(row);
-    }
+    });
+  }
+
+  function shopsForTaskMode(task, mode) {
+    if (mode === "all") return task.allShops || [];
+    if (mode === "watch") return task.watchShops;
+    return task.affectedShops;
+  }
+
+  function renderDropRow(shop) {
+    const critical = shop.status === "bad";
+    return `
+      <tr class="${critical ? "critical-row" : ""}">
+        <td>${escapeHtml(shop.shop)}</td>
+        <td>${shop.current.toLocaleString()}</td>
+        <td>${formatNumber(shop.previous4Avg)}</td>
+        <td class="${shop.fourWeekPct < 0 ? "negative" : ""}">${formatPct(shop.fourWeekPct)}</td>
+        <td class="${shop.dropInCalls < 0 ? "negative" : ""}">${shop.dropInCalls.toLocaleString()}</td>
+        <td>${shop.daysSinceCall === null ? "Never" : shop.daysSinceCall.toLocaleString()}</td>
+        <td>${pill(statusLabel(shop.status), shop.status)}</td>
+      </tr>`;
   }
 
   function renderTaskDetail() {
@@ -598,7 +672,7 @@
         <div class="task-row">
           <span>${escapeHtml(shop.shop)}</span>
           <b>${shop.current}</b>
-          <span>${formatPct(shop.pct)}</span>
+          <span>${formatPct(shop.fourWeekPct)}</span>
           ${pill(statusLabel(shop.status), shop.status)}
         </div>`
       )
@@ -674,7 +748,7 @@
         const stat = shop.taskStats.find((item) => item.taskType === task);
         const status = stat ? stat.status : "off";
         const label = stat ? `${stat.current} (${formatPct(stat.pct)})` : "Off";
-        html += `<div class="heat-cell ${status}" title="${escapeHtml(shop.shop)} · ${escapeHtml(task)}">${label}</div>`;
+        html += `<div class="heat-cell ${status}" title="${escapeHtml(shop.shop)} - ${escapeHtml(task)}">${label}</div>`;
       }
     }
     html += "</div>";
@@ -728,12 +802,17 @@
   }
 
   function statusLabel(status) {
-    return status === "bad" ? "Dropped" : status === "watch" ? "Watch" : status === "off" ? "Off" : "Healthy";
+    return status === "bad" ? "Critical" : status === "watch" ? "Call Drop" : status === "off" ? "Off" : "Healthy";
   }
 
   function formatPct(value) {
     const rounded = Math.round(value);
     return `${rounded > 0 ? "+" : ""}${rounded}%`;
+  }
+
+  function formatNumber(value) {
+    const rounded = Math.round(value * 10) / 10;
+    return Number.isInteger(rounded) ? rounded.toLocaleString() : rounded.toLocaleString(undefined, { maximumFractionDigits: 1 });
   }
 
   function escapeHtml(value) {
@@ -747,7 +826,8 @@
   function setupEvents() {
     if (els.saveConfigBtn) els.saveConfigBtn.addEventListener("click", loadData);
     els.refreshBtn.addEventListener("click", loadData);
-    els.shopSearch.addEventListener("input", renderTaskRows);
+    els.shopSearch.addEventListener("input", renderDropGroups);
+    if (els.viewFilter) els.viewFilter.addEventListener("change", renderDropGroups);
     els.saveShopMappings.addEventListener("click", () => saveMappings("shop"));
     els.saveTaskMappings.addEventListener("click", () => saveMappings("task"));
     document.querySelectorAll(".tab").forEach((button) => {
