@@ -22,7 +22,7 @@
       <div id="loadStatus" class="status-line"></div>
 
       <nav class="tabs" aria-label="Dashboard pages">
-        <button class="tab active" data-tab="shop">By Shop</button>
+        <button class="tab active" data-tab="shop">By Task</button>
         <button class="tab" data-tab="projections">Cross-Shop Projections</button>
         <button class="tab" data-tab="mappings">Mappings</button>
       </nav>
@@ -40,14 +40,14 @@
             <small id="companyWow">0% vs prior week</small>
           </article>
           <article>
-            <span>Shops with drops</span>
+            <span>Tasks with drops</span>
             <strong id="dropCount">0</strong>
-            <small>Week or baseline flags</small>
+            <small>Company-level task flags</small>
           </article>
           <article>
-            <span>Execution failures</span>
+            <span>Shops affected</span>
             <strong id="executionFailures">0</strong>
-            <small>Tasks normal, calls dropped</small>
+            <small>Only where a task dropped</small>
           </article>
           <article>
             <span>Unmapped rows</span>
@@ -60,21 +60,21 @@
           <section class="table-shell">
             <div class="section-heading">
               <div>
-                <h2>Shop Health</h2>
-                <p>Only task types currently toggled on are included.</p>
+                <h2>Task Health</h2>
+                <p>Task types are the primary signal. Shops appear only when that task drops at that shop.</p>
               </div>
-              <input id="shopSearch" type="search" placeholder="Search shops" />
+              <input id="shopSearch" type="search" placeholder="Search tasks" />
             </div>
             <div class="table-wrap">
               <table>
                 <thead>
                   <tr>
-                    <th>Shop</th>
+                    <th>Task</th>
+                    <th>Active shops</th>
                     <th>This week</th>
                     <th>Prior week</th>
                     <th>% change</th>
-                    <th>Creation</th>
-                    <th>Diagnosis</th>
+                    <th>Dropped shops</th>
                     <th>Status</th>
                   </tr>
                 </thead>
@@ -86,14 +86,14 @@
           <aside class="detail-panel">
             <div class="section-heading compact">
               <div>
-                <h2 id="selectedShopName">Select a shop</h2>
-                <p id="selectedShopMeta">Trend, task mix, and baseline comparison.</p>
+                <h2 id="selectedTaskName">Select a task</h2>
+                <p id="selectedTaskMeta">Trend, affected shops, and baseline comparison.</p>
               </div>
             </div>
-            <canvas id="trendCanvas" width="720" height="260" aria-label="Shop call trend"></canvas>
+            <canvas id="trendCanvas" width="720" height="260" aria-label="Task call trend"></canvas>
             <div id="taskBreakdown" class="task-breakdown"></div>
             <div class="diagnostic-box">
-              <h3>Diagnostic Cross-Check</h3>
+              <h3>Task Drop Summary</h3>
               <div id="diagnosticMatrix" class="matrix"></div>
             </div>
           </aside>
@@ -164,7 +164,7 @@
       </section>
     </main>
 
-    <script src="./config.js?v=20260917-1"></script>
-    <script src="./app.js?v=20260917-1"></script>
+    <script src="./config.js?v=20260917-2"></script>
+    <script src="./app.js?v=20260917-2"></script>
   </body>
 </html>

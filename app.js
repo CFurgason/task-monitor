@@ -15,7 +15,7 @@
     taskMappings: {},
     config: { callsUrl: repoConfig.callsUrl || DEFAULT_CALLS_URL, togglesUrl: repoConfig.togglesUrl || "" },
     metrics: null,
-    selectedShop: null,
+    selectedTask: null,
   };
 
   const els = {
@@ -36,8 +36,8 @@
     unmappedCount: document.getElementById("unmappedCount"),
     shopRows: document.getElementById("shopRows"),
     shopSearch: document.getElementById("shopSearch"),
-    selectedShopName: document.getElementById("selectedShopName"),
-    selectedShopMeta: document.getElementById("selectedShopMeta"),
+    selectedTaskName: document.getElementById("selectedTaskName"),
+    selectedTaskMeta: document.getElementById("selectedTaskMeta"),
     trendCanvas: document.getElementById("trendCanvas"),
     taskBreakdown: document.getElementById("taskBreakdown"),
     diagnosticMatrix: document.getElementById("diagnosticMatrix"),
@@ -353,6 +353,7 @@
 
     const companyCurrent = shopStats.reduce((sum, shop) => sum + shop.current, 0);
     const companyPrevious = shopStats.reduce((sum, shop) => sum + shop.previous, 0);
+    const taskSummaries = buildTaskSummaries(taskHeaders, shopStats, cleanCalls, today);
     const warnings = buildWarnings(shopStats);
 
     state.metrics = {
@@ -362,6 +363,7 @@
       shops: shopStats,
       warnings,
       taskHeaders,
+      taskSummaries,
       unmapped,
       companyCurrent,
       companyPrevious,
@@ -397,6 +399,50 @@
       lowerBound,
       status: statusFor(current, previous, baseline, lowerBound),
     };
+  }
+
+  function buildTaskSummaries(taskHeaders, shopStats, cleanCalls, today) {
+    return taskHeaders
+      .map((taskType) => {
+        const shopTaskStats = shopStats
+          .map((shop) => {
+            const stat = shop.taskStats.find((item) => item.taskType === taskType);
+            return stat ? { ...stat, shop: shop.shop, diagnosis: shop.diagnosis, creationNormal: shop.creationNormal } : null;
+          })
+          .filter(Boolean);
+        const taskCalls = cleanCalls.filter((call) => call.taskType === taskType);
+        const current = shopTaskStats.reduce((sum, stat) => sum + stat.current, 0);
+        const previous = shopTaskStats.reduce((sum, stat) => sum + stat.previous, 0);
+        const baseline = shopTaskStats.reduce((sum, stat) => sum + stat.baseline, 0);
+        const lowerBound = shopTaskStats.reduce((sum, stat) => sum + stat.lowerBound, 0);
+        const affectedShops = shopTaskStats
+          .filter((stat) => stat.status === "bad")
+          .sort((a, b) => {
+            const aGap = a.baseline ? (a.baseline - a.current) / a.baseline : 0;
+            const bGap = b.baseline ? (b.baseline - b.current) / b.baseline : 0;
+            return bGap - aGap;
+          });
+        const watchShops = shopTaskStats.filter((stat) => stat.status === "watch");
+        const aggregateStatus = statusFor(current, previous, baseline, lowerBound);
+        const status = affectedShops.length ? "bad" : watchShops.length ? "watch" : aggregateStatus;
+        return {
+          taskType,
+          activeShops: shopTaskStats.length,
+          affectedShops,
+          watchShops,
+          current,
+          previous,
+          pct: pctChange(current, previous),
+          baseline,
+          lowerBound,
+          status,
+          trend: buildDailyTrend(taskCalls, today),
+        };
+      })
+      .sort((a, b) => {
+        const statusOrder = { bad: 0, watch: 1, good: 2 };
+        return statusOrder[a.status] - statusOrder[b.status] || b.affectedShops.length - a.affectedShops.length || a.taskType.localeCompare(b.taskType);
+      });
   }
 
   function isDropped(current, previous, baseline, lowerBound) {
@@ -498,69 +544,70 @@
 
   function renderAll() {
     renderSummary();
-    renderShopRows();
+    renderTaskRows();
     renderWarnings();
     renderHeatmap();
     renderMappings();
-    if (!state.selectedShop && state.metrics.shops.length) state.selectedShop = state.metrics.shops[0].shop;
-    renderShopDetail();
+    if (!state.selectedTask && state.metrics.taskSummaries.length) state.selectedTask = state.metrics.taskSummaries[0].taskType;
+    renderTaskDetail();
   }
 
   function renderSummary() {
     const metrics = state.metrics;
     els.companyCurrent.textContent = metrics.companyCurrent.toLocaleString();
     els.companyWow.textContent = `${formatPct(metrics.companyPct)} vs prior week`;
-    els.dropCount.textContent = metrics.shops.filter((shop) => shop.status === "bad").length.toLocaleString();
-    els.executionFailures.textContent = metrics.shops.filter((shop) => shop.diagnosis === "Execution failure").length.toLocaleString();
+    els.dropCount.textContent = metrics.taskSummaries.filter((task) => task.affectedShops.length > 0).length.toLocaleString();
+    els.executionFailures.textContent = unique(metrics.taskSummaries.flatMap((task) => task.affectedShops.map((shop) => shop.shop))).length.toLocaleString();
     els.unmappedCount.textContent = metrics.unmapped.rows.toLocaleString();
   }
 
-  function renderShopRows() {
+  function renderTaskRows() {
     const query = els.shopSearch.value.trim().toLowerCase();
     els.shopRows.innerHTML = "";
-    for (const shop of state.metrics.shops.filter((item) => item.shop.toLowerCase().includes(query))) {
+    for (const task of state.metrics.taskSummaries.filter((item) => item.taskType.toLowerCase().includes(query))) {
       const row = document.createElement("tr");
-      row.className = `clickable ${state.selectedShop === shop.shop ? "selected" : ""}`;
+      row.className = `clickable ${state.selectedTask === task.taskType ? "selected" : ""}`;
       row.innerHTML = `
-        <td>${escapeHtml(shop.shop)}</td>
-        <td>${shop.current.toLocaleString()}</td>
-        <td>${shop.previous.toLocaleString()}</td>
-        <td>${formatPct(shop.pct)}</td>
-        <td>${shop.creationNormal ? pill("Still creating", "good") : pill("Stalled", "watch")}</td>
-        <td>${escapeHtml(shop.diagnosis)}</td>
-        <td>${pill(statusLabel(shop.status), shop.status)}</td>
+        <td>${escapeHtml(task.taskType)}</td>
+        <td>${task.activeShops.toLocaleString()}</td>
+        <td>${task.current.toLocaleString()}</td>
+        <td>${task.previous.toLocaleString()}</td>
+        <td>${formatPct(task.pct)}</td>
+        <td>${task.affectedShops.length.toLocaleString()}</td>
+        <td>${pill(statusLabel(task.status), task.status)}</td>
       `;
       row.addEventListener("click", () => {
-        state.selectedShop = shop.shop;
-        renderShopRows();
-        renderShopDetail();
+        state.selectedTask = task.taskType;
+        renderTaskRows();
+        renderTaskDetail();
       });
       els.shopRows.appendChild(row);
     }
   }
 
-  function renderShopDetail() {
-    const shop = state.metrics && state.metrics.shops.find((item) => item.shop === state.selectedShop);
-    if (!shop) return;
-    els.selectedShopName.textContent = shop.shop;
-    els.selectedShopMeta.textContent = `${shop.current.toLocaleString()} calls this week, ${formatPct(shop.pct)} vs prior week, ${shop.baseline.toFixed(1)} median weekly baseline.`;
-    drawTrend(shop.trend);
-    els.taskBreakdown.innerHTML = shop.taskStats
+  function renderTaskDetail() {
+    const task = state.metrics && state.metrics.taskSummaries.find((item) => item.taskType === state.selectedTask);
+    if (!task) return;
+    els.selectedTaskName.textContent = task.taskType;
+    els.selectedTaskMeta.textContent = `${task.current.toLocaleString()} calls this week across ${task.activeShops.toLocaleString()} active shops. ${task.affectedShops.length.toLocaleString()} shops have a drop.`;
+    drawTrend(task.trend);
+    const affected = task.affectedShops.length ? task.affectedShops : task.watchShops;
+    els.taskBreakdown.innerHTML = affected.length
       .map(
-        (task) => `
+        (shop) => `
         <div class="task-row">
-          <span>${escapeHtml(task.taskType)}</span>
-          <b>${task.current}</b>
-          <span>${formatPct(task.pct)}</span>
-          ${pill(statusLabel(task.status), task.status)}
+          <span>${escapeHtml(shop.shop)}</span>
+          <b>${shop.current}</b>
+          <span>${formatPct(shop.pct)}</span>
+          ${pill(statusLabel(shop.status), shop.status)}
         </div>`
       )
-      .join("");
+      .join("") || `<div class="muted">No shops currently show a drop for this task.</div>`;
     els.diagnosticMatrix.innerHTML = `
-      <div><strong>Normal tasks / Normal calls</strong>${shop.diagnosis === "Healthy" ? "Current shop state" : "No current match"}</div>
-      <div><strong>Normal tasks / Dropped calls</strong>${shop.diagnosis === "Execution failure" ? "Highest priority" : "No current match"}</div>
-      <div><strong>Dropped tasks / Dropped calls</strong>${shop.diagnosis === "Upstream/business issue" ? "Likely upstream" : "No current match"}</div>
-      <div><strong>Dropped tasks / Normal calls</strong>${shop.diagnosis === "Manual review" ? "Worth manual review" : "No current match"}</div>
+      <div><strong>Active shops</strong>${task.activeShops.toLocaleString()}</div>
+      <div><strong>Dropped shops</strong>${task.affectedShops.length.toLocaleString()}</div>
+      <div><strong>Watch shops</strong>${task.watchShops.length.toLocaleString()}</div>
+      <div><strong>Task status</strong>${statusLabel(task.status)}</div>
     `;
   }
 
@@ -700,7 +747,7 @@
   function setupEvents() {
     if (els.saveConfigBtn) els.saveConfigBtn.addEventListener("click", loadData);
     els.refreshBtn.addEventListener("click", loadData);
-    els.shopSearch.addEventListener("input", renderShopRows);
+    els.shopSearch.addEventListener("input", renderTaskRows);
     els.saveShopMappings.addEventListener("click", () => saveMappings("shop"));
     els.saveTaskMappings.addEventListener("click", () => saveMappings("task"));
     document.querySelectorAll(".tab").forEach((button) => {
